@@ -137,6 +137,28 @@ RSpec.describe RuboCop::Cop::Layout::IndentationStyle, :config do
       RUBY
     end
 
+    it 'registers and corrects an offense for a line indented with mixed whitespace (space then tab)' do
+      expect_offense(<<~RUBY)
+          \tx = 0
+        ^^ Space detected in indentation.
+      RUBY
+
+      expect_correction(<<~RUBY, loop: false)
+        \t\tx = 0
+      RUBY
+    end
+
+    it 'registers and corrects an offense for a line indented with mixed whitespace (tab then spaces)' do
+      expect_offense(<<~RUBY)
+        \t  x = 0
+        ^^^ Space detected in indentation.
+      RUBY
+
+      expect_correction(<<~RUBY, loop: false)
+        \t\tx = 0
+      RUBY
+    end
+
     it 'registers offenses before __END__ but not after' do
       expect_offense(<<~RUBY)
           x = 0

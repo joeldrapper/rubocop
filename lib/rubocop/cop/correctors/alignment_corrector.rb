@@ -16,16 +16,18 @@ module RuboCop
           return unless node
 
           @processed_source = processed_source
-          # Disable autocorrection for tabs as it requires special handling
-          return if using_tabs?
 
           expr = node.respond_to?(:loc) ? node.source_range : node
           return if block_comment_within?(expr)
 
           taboo_ranges = inside_string_ranges(node)
 
-          each_line(expr) do |line_begin_pos|
-            autocorrect_line(corrector, line_begin_pos, expr, column_delta, taboo_ranges)
+          if using_tabs?
+            correct_tabs(corrector, expr, column_delta, taboo_ranges)
+          else
+            each_line(expr) do |line_begin_pos|
+              autocorrect_line(corrector, line_begin_pos, expr, column_delta, taboo_ranges)
+            end
           end
         end
 
@@ -56,6 +58,52 @@ module RuboCop
           elsif /\A[ \t]+\z/.match?(range.source)
             corrector.remove(range)
           end
+        end
+
+        # rubocop:disable Metrics
+        def correct_tabs(corrector, expr, column_delta, taboo_ranges)
+          width = tab_indentation_width
+          # Only correct when column_delta is a multiple of the indentation
+          # width. Non-multiples arise from mixed tabs/spaces and would cause
+          # oscillation between passes (infinite loop).
+          return unless (column_delta % width).zero?
+
+          tab_delta = column_delta / width
+          source = processed_source.buffer.source
+
+          each_line(expr) do |line_begin_pos|
+            line_start = line_start_pos(source, line_begin_pos)
+            line_end = source.index("\n", line_begin_pos) || source.length
+            prefix = source[line_start...line_begin_pos]
+            whitespace_start = /\A[ \t]*\z/.match?(prefix) ? line_start : line_begin_pos
+            leading_ws = source[whitespace_start...line_end][/\A[ \t]*/]
+            next if leading_ws.empty? && tab_delta.negative?
+
+            ws_range = range_between(whitespace_start, whitespace_start + leading_ws.length)
+            next if taboo_ranges.any? { |t| within?(ws_range, t) }
+
+            current_tabs = ((leading_ws.count("\t") * width) + leading_ws.count(' ')) / width
+            new_tabs = [current_tabs + tab_delta, 0].max
+            new_ws = "\t" * new_tabs
+
+            corrector.replace(ws_range, new_ws) unless leading_ws == new_ws
+          end
+        end
+        # rubocop:enable Metrics
+
+        def line_start_pos(source, pos)
+          return 0 if pos.zero?
+
+          newline = source.rindex("\n", pos - 1)
+          newline ? newline + 1 : 0
+        end
+
+        def tab_indentation_width
+          config = processed_source.config
+
+          config.for_cop('Layout/IndentationStyle')&.[]('IndentationWidth') ||
+            config.for_cop('Layout/IndentationWidth')&.[]('Width') ||
+            2
         end
 
         def inside_string_ranges(node)

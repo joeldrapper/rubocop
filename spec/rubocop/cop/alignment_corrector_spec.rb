@@ -98,6 +98,29 @@ RSpec.describe RuboCop::Cop::AlignmentCorrector, :config do
       end
     end
 
+    context 'with tabs indentation width override' do
+      let(:config) do
+        RuboCop::Config.new(
+          'Layout/IndentationStyle' => { 'EnforcedStyle' => 'tabs', 'IndentationWidth' => 4 },
+          'Layout/IndentationWidth' => { 'Width' => 2 },
+          'Test/AlignmentDirective' => {}
+        )
+      end
+
+      it 'uses Layout/IndentationStyle IndentationWidth when outdenting tabs' do
+        expect_offense(<<~RUBY)
+          # << 4
+          		foo
+            ^^^ Indent this node.
+        RUBY
+
+        expect_correction(<<~RUBY)
+          #
+          	foo
+        RUBY
+      end
+    end
+
     context 'within string literals' do
       it 'does not insert whitespace' do
         expect_offense(<<~RUBY)

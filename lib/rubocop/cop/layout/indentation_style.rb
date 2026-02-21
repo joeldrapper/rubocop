@@ -56,7 +56,7 @@ module RuboCop
         private
 
         def autocorrect(corrector, range)
-          if range.source.include?("\t")
+          if style == :spaces
             autocorrect_lambda_for_tabs(corrector, range)
           else
             autocorrect_lambda_for_spaces(corrector, range)
@@ -81,7 +81,10 @@ module RuboCop
 
         def autocorrect_lambda_for_spaces(corrector, range)
           corrector.replace(range, range.source.gsub(/\A\s+/) do |match|
-            "\t" * (match.size / configured_indentation_width)
+            tab_count = match.count("\t")
+            space_count = match.count(' ')
+            visual_width = (tab_count * configured_indentation_width) + space_count
+            "\t" * (visual_width / configured_indentation_width)
           end)
         end
 
